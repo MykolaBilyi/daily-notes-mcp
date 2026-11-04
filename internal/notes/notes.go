@@ -289,18 +289,55 @@ func (s *Store) writeAtomic(date, content string) error {
 }
 
 func (s *Store) withLock(date string, fn func() error) error {
-	lock, err := os.OpenFile(s.path(date)+".lock", os.O_CREATE|os.O_RDWR, 0o644)
+	lockPath := s.path(date) + ".lock"
+	lock, err := s.acquireLock(date, lockPath)
 	if err != nil {
-		return fmt.Errorf("open note lock: %w", err)
+		return err
 	}
-	defer lock.Close()
-
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
-		return fmt.Errorf("lock note %s: %w", date, err)
-	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	defer func() {
+		os.Remove(lockPath)
+		syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+		lock.Close()
+	}()
 
 	return fn()
+}
+
+func (s *Store) acquireLock(date, lockPath string) (*os.File, error) {
+	for {
+		lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+		if err != nil {
+			return nil, fmt.Errorf("open note lock: %w", err)
+		}
+		if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+			lock.Close()
+			return nil, fmt.Errorf("lock note %s: %w", date, err)
+		}
+
+		held, err := lock.Stat()
+		if err != nil {
+			syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+			lock.Close()
+			return nil, fmt.Errorf("stat note lock %s: %w", date, err)
+		}
+		current, err := os.Stat(lockPath)
+		if errors.Is(err, os.ErrNotExist) {
+			syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+			lock.Close()
+			continue
+		}
+		if err != nil {
+			syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+			lock.Close()
+			return nil, fmt.Errorf("stat note lock %s: %w", date, err)
+		}
+		if os.SameFile(held, current) {
+			return lock, nil
+		}
+
+		syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+		lock.Close()
+	}
 }
 
 func render(date, body string) string {

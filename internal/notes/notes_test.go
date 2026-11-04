@@ -3,9 +3,11 @@ package notes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -110,6 +112,69 @@ func TestReplaceConcurrency(t *testing.T) {
 	}
 	if note.Body != "second" {
 		t.Errorf("Body = %q, want second", note.Body)
+	}
+}
+
+func TestLockFileCleanup(t *testing.T) {
+	store := newStore(t)
+
+	if _, err := store.Replace("2026-11-04", "body", ""); err != nil {
+		t.Fatalf("Replace: %v", err)
+	}
+
+	matches, err := filepath.Glob(filepath.Join(store.Dir(), "*.lock"))
+	if err != nil {
+		t.Fatalf("Glob: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("lock files remain: %v", matches)
+	}
+}
+
+func TestConcurrentReplaceCleansLockFiles(t *testing.T) {
+	store := newStore(t)
+
+	const writers = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, writers)
+	for i := range writers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 100 {
+				note, err := store.Get("2026-11-04")
+				if err != nil && !errors.Is(err, ErrNotFound) {
+					errs <- err
+					return
+				}
+				revision := ""
+				if err == nil {
+					revision = note.Revision
+				}
+				_, err = store.Replace("2026-11-04", fmt.Sprintf("writer-%d", i), revision)
+				if err == nil {
+					return
+				}
+				if !errors.Is(err, ErrRevisionMismatch) && !errors.Is(err, ErrRevisionRequired) {
+					errs <- err
+					return
+				}
+			}
+			errs <- errors.New("too many replace retries")
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Errorf("concurrent replace: %v", err)
+	}
+
+	matches, err := filepath.Glob(filepath.Join(store.Dir(), "*.lock"))
+	if err != nil {
+		t.Fatalf("Glob: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("lock files remain: %v", matches)
 	}
 }
 
