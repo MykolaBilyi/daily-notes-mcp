@@ -43,45 +43,33 @@ func TestTools(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	sort.Strings(names)
-	want := []string{"get_daily_note", "list_daily_notes", "replace_daily_note", "search_daily_notes"}
+	want := []string{"get_note", "get_today_note", "search_notes", "update_today_note"}
 	if fmt.Sprint(names) != fmt.Sprint(want) {
 		t.Errorf("tools = %v, want %v", names, want)
 	}
 
-	created := callTool(t, session, "replace_daily_note", map[string]any{
-		"date": "2026-11-04",
-		"body": "# Today\n\n- item",
-	})
+	today := store.Today()
+
+	created := callTool(t, session, "get_today_note", map[string]any{})
 	if created.IsError {
-		t.Fatalf("replace create failed: %s", resultText(created))
+		t.Fatalf("get today failed: %s", resultText(created))
 	}
-	revision := structuredMap(t, created)["revision"].(string)
+	createdOut := structuredMap(t, created)
+	if createdOut["date"] != today {
+		t.Errorf("date = %v, want %s", createdOut["date"], today)
+	}
+	if createdOut["found"] != true {
+		t.Errorf("found = %v, want true", createdOut["found"])
+	}
+	if createdOut["body"] != "" {
+		t.Errorf("body = %q, want empty", createdOut["body"])
+	}
+	revision := createdOut["revision"].(string)
 	if revision == "" {
 		t.Fatal("expected a revision")
 	}
 
-	got := callTool(t, session, "get_daily_note", map[string]any{"date": "2026-11-04"})
-	if got.IsError {
-		t.Fatalf("get failed: %s", resultText(got))
-	}
-	gotOut := structuredMap(t, got)
-	if gotOut["body"] != "# Today\n\n- item" {
-		t.Errorf("body = %q", gotOut["body"])
-	}
-	if gotOut["found"] != true {
-		t.Errorf("found = %v, want true", gotOut["found"])
-	}
-
-	missing := callTool(t, session, "get_daily_note", map[string]any{"date": "2026-11-05"})
-	if missing.IsError {
-		t.Fatalf("get missing failed: %s", resultText(missing))
-	}
-	if structuredMap(t, missing)["found"] != false {
-		t.Error("expected found=false for missing note")
-	}
-
-	conflict := callTool(t, session, "replace_daily_note", map[string]any{
-		"date":     "2026-11-04",
+	conflict := callTool(t, session, "update_today_note", map[string]any{
 		"body":     "overwritten",
 		"revision": "stale",
 	})
@@ -89,28 +77,43 @@ func TestTools(t *testing.T) {
 		t.Fatal("expected stale revision to fail")
 	}
 
-	updated := callTool(t, session, "replace_daily_note", map[string]any{
-		"date":     "2026-11-04",
+	updated := callTool(t, session, "update_today_note", map[string]any{
 		"body":     "updated\nTODO: ship",
 		"revision": revision,
 	})
 	if updated.IsError {
-		t.Fatalf("replace update failed: %s", resultText(updated))
+		t.Fatalf("update failed: %s", resultText(updated))
 	}
 	if structuredMap(t, updated)["revision"] == revision {
 		t.Error("expected revision to change")
 	}
 
-	listed := callTool(t, session, "list_daily_notes", map[string]any{})
-	if listed.IsError {
-		t.Fatalf("list failed: %s", resultText(listed))
+	got := callTool(t, session, "get_note", map[string]any{"date": today})
+	if got.IsError {
+		t.Fatalf("get failed: %s", resultText(got))
 	}
-	dates := structuredMap(t, listed)["dates"].([]any)
-	if len(dates) != 1 || dates[0] != "2026-11-04" {
-		t.Errorf("dates = %v", dates)
+	gotOut := structuredMap(t, got)
+	if gotOut["body"] != "updated\nTODO: ship" {
+		t.Errorf("body = %q", gotOut["body"])
+	}
+	if gotOut["found"] != true {
+		t.Errorf("found = %v, want true", gotOut["found"])
 	}
 
-	found := callTool(t, session, "search_daily_notes", map[string]any{"query": "todo"})
+	missing := callTool(t, session, "get_note", map[string]any{"date": "2000-01-01"})
+	if missing.IsError {
+		t.Fatalf("get missing failed: %s", resultText(missing))
+	}
+	if structuredMap(t, missing)["found"] != false {
+		t.Error("expected found=false for missing note")
+	}
+
+	missingDate := callTool(t, session, "get_note", map[string]any{})
+	if !missingDate.IsError {
+		t.Fatal("expected get_note without date to fail")
+	}
+
+	found := callTool(t, session, "search_notes", map[string]any{"query": "todo"})
 	if found.IsError {
 		t.Fatalf("search failed: %s", resultText(found))
 	}
@@ -119,7 +122,7 @@ func TestTools(t *testing.T) {
 		t.Fatalf("matches = %v", matches)
 	}
 	match := matches[0].(map[string]any)
-	if match["date"] != "2026-11-04" || match["line"] != float64(2) {
+	if match["date"] != today || match["line"] != float64(2) {
 		t.Errorf("match = %v", match)
 	}
 }

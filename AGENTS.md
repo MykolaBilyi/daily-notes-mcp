@@ -77,7 +77,7 @@ Flags with environment fallbacks:
   register it with `server.AddReceivingMiddleware(...)`.
 - Keep tool names and descriptions stable and descriptive; MCP clients depend on them.
 
-Current tools: `get_daily_note`, `replace_daily_note`, `list_daily_notes`, `search_daily_notes`.
+Current tools: `get_today_note`, `update_today_note`, `get_note`, `search_notes`.
 
 ## Code style
 

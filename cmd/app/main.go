@@ -72,7 +72,7 @@ func main() {
 
 	log.Printf("Daily notes MCP server %s listening on http://%s/mcp", version.Version, addr)
 	log.Printf("Notes directory: %s (timezone %s)", store.Dir(), loc)
-	log.Printf("Tools: get_daily_note, replace_daily_note, list_daily_notes, search_daily_notes")
+	log.Printf("Tools: get_today_note, update_today_note, get_note, search_notes")
 
 	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("Server failed: %v", err)

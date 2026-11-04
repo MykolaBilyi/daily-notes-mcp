@@ -48,8 +48,8 @@ func NewHTTPHandler(s *mcp.Server, store *notes.Store) http.Handler {
 	return mux
 }
 
-type getInput struct {
-	Date string `json:"date,omitempty" jsonschema:"note date in YYYY-MM-DD format; defaults to today"`
+type getNoteInput struct {
+	Date string `json:"date" jsonschema:"note date in YYYY-MM-DD format"`
 }
 
 type getOutput struct {
@@ -59,24 +59,14 @@ type getOutput struct {
 	Revision string `json:"revision"`
 }
 
-type replaceInput struct {
-	Date     string `json:"date,omitempty" jsonschema:"note date in YYYY-MM-DD format; defaults to today"`
+type updateTodayInput struct {
 	Body     string `json:"body" jsonschema:"full markdown body of the note"`
-	Revision string `json:"revision,omitempty" jsonschema:"current revision from get_daily_note; required to replace an existing note, omit to create"`
+	Revision string `json:"revision,omitempty" jsonschema:"current revision from get_today_note; required to replace an existing note, omit to create"`
 }
 
-type replaceOutput struct {
+type updateOutput struct {
 	Date     string `json:"date"`
 	Revision string `json:"revision"`
-}
-
-type listInput struct {
-	From string `json:"from,omitempty" jsonschema:"earliest date in YYYY-MM-DD format (inclusive)"`
-	To   string `json:"to,omitempty" jsonschema:"latest date in YYYY-MM-DD format (inclusive)"`
-}
-
-type listOutput struct {
-	Dates []string `json:"dates"`
 }
 
 type searchInput struct {
@@ -93,28 +83,70 @@ type searchOutput struct {
 
 func registerTools(s *mcp.Server, store *notes.Store) {
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_daily_note",
-		Description: "Get the markdown body and revision of a daily note by date; defaults to today.",
-	}, getDailyNote(store))
+		Name:        "get_today_note",
+		Description: "Get today's daily note, creating it with an empty body if it does not exist.",
+	}, getTodayNote(store))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "replace_daily_note",
-		Description: "Replace the full markdown body of a daily note. Requires the current revision for existing notes.",
-	}, replaceDailyNote(store))
+		Name:        "update_today_note",
+		Description: "Replace the full markdown body of today's daily note. Requires the current revision for existing notes.",
+	}, updateTodayNote(store))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "list_daily_notes",
-		Description: "List dates that have daily notes, optionally bounded by an inclusive date range.",
-	}, listDailyNotes(store))
+		Name:        "get_note",
+		Description: "Get the markdown body and revision of a daily note by date.",
+	}, getNote(store))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "search_daily_notes",
+		Name:        "search_notes",
 		Description: "Search daily note bodies for case-insensitive text and return matching line snippets.",
-	}, searchDailyNotes(store))
+	}, searchNotes(store))
 }
 
-func getDailyNote(store *notes.Store) mcp.ToolHandlerFor[getInput, getOutput] {
-	return func(_ context.Context, _ *mcp.CallToolRequest, in getInput) (*mcp.CallToolResult, getOutput, error) {
+func getTodayNote(store *notes.Store) mcp.ToolHandlerFor[struct{}, getOutput] {
+	return func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, getOutput, error) {
+		today := store.Today()
+		note, err := store.Get(today)
+		if errors.Is(err, notes.ErrNotFound) {
+			_, createErr := store.Replace(today, "", "")
+			if createErr != nil && !errors.Is(createErr, notes.ErrRevisionRequired) && !errors.Is(createErr, notes.ErrRevisionMismatch) {
+				return nil, getOutput{}, createErr
+			}
+			note, err = store.Get(today)
+		}
+		if err != nil {
+			return nil, getOutput{}, err
+		}
+
+		out := getOutput{
+			Date:     note.Date,
+			Found:    true,
+			Body:     note.Body,
+			Revision: note.Revision,
+		}
+		text := note.Body
+		if text == "" {
+			text = fmt.Sprintf("Daily note for %s is empty.", note.Date)
+		}
+		return textResult(text), out, nil
+	}
+}
+
+func updateTodayNote(store *notes.Store) mcp.ToolHandlerFor[updateTodayInput, updateOutput] {
+	return func(_ context.Context, _ *mcp.CallToolRequest, in updateTodayInput) (*mcp.CallToolResult, updateOutput, error) {
+		today := store.Today()
+		revision, err := store.Replace(today, in.Body, in.Revision)
+		if err != nil {
+			return nil, updateOutput{}, err
+		}
+
+		out := updateOutput{Date: today, Revision: revision}
+		return textResult(fmt.Sprintf("Saved daily note for %s (revision %s).", today, revision)), out, nil
+	}
+}
+
+func getNote(store *notes.Store) mcp.ToolHandlerFor[getNoteInput, getOutput] {
+	return func(_ context.Context, _ *mcp.CallToolRequest, in getNoteInput) (*mcp.CallToolResult, getOutput, error) {
 		date, err := store.ResolveDate(in.Date)
 		if err != nil {
 			return nil, getOutput{}, err
@@ -142,37 +174,7 @@ func getDailyNote(store *notes.Store) mcp.ToolHandlerFor[getInput, getOutput] {
 	}
 }
 
-func replaceDailyNote(store *notes.Store) mcp.ToolHandlerFor[replaceInput, replaceOutput] {
-	return func(_ context.Context, _ *mcp.CallToolRequest, in replaceInput) (*mcp.CallToolResult, replaceOutput, error) {
-		date, err := store.ResolveDate(in.Date)
-		if err != nil {
-			return nil, replaceOutput{}, err
-		}
-		revision, err := store.Replace(date, in.Body, in.Revision)
-		if err != nil {
-			return nil, replaceOutput{}, err
-		}
-
-		out := replaceOutput{Date: date, Revision: revision}
-		return textResult(fmt.Sprintf("Saved daily note for %s (revision %s).", date, revision)), out, nil
-	}
-}
-
-func listDailyNotes(store *notes.Store) mcp.ToolHandlerFor[listInput, listOutput] {
-	return func(_ context.Context, _ *mcp.CallToolRequest, in listInput) (*mcp.CallToolResult, listOutput, error) {
-		dates, err := store.List(in.From, in.To)
-		if err != nil {
-			return nil, listOutput{}, err
-		}
-		out := listOutput{Dates: dates}
-		if len(dates) == 0 {
-			return textResult("No daily notes found."), out, nil
-		}
-		return textResult(strings.Join(dates, "\n")), out, nil
-	}
-}
-
-func searchDailyNotes(store *notes.Store) mcp.ToolHandlerFor[searchInput, searchOutput] {
+func searchNotes(store *notes.Store) mcp.ToolHandlerFor[searchInput, searchOutput] {
 	return func(_ context.Context, _ *mcp.CallToolRequest, in searchInput) (*mcp.CallToolResult, searchOutput, error) {
 		matches, err := store.Search(in.Query, in.From, in.To, in.MaxResults)
 		if err != nil {

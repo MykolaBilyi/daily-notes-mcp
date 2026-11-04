@@ -6,14 +6,14 @@ MCP server for reading and editing daily markdown notes. Runs over streamable HT
 
 ## Tools
 
-- `get_daily_note` — get a note body and revision by date (defaults to today).
-- `replace_daily_note` — replace a note body; requires the current revision for existing notes.
-- `list_daily_notes` — list note dates, optionally within an inclusive range.
-- `search_daily_notes` — case-insensitive substring search with line snippets.
+- `get_today_note` — get today's note, creating it with an empty body if needed.
+- `update_today_note` — replace today's note body; requires the current revision.
+- `get_note` — get a note body and revision by date.
+- `search_notes` — case-insensitive substring search with line snippets.
 
 Notes are stored as `<notes-dir>/YYYY-MM-DD.md` with server-managed YAML
 frontmatter containing only `date`. Updates use optimistic concurrency: call
-`get_daily_note`, then pass the returned `revision` to `replace_daily_note`.
+`get_today_note`, then pass the returned `revision` to `update_today_note`.
 Writes are atomic and protected by a per-note file lock.
 
 ## Configuration
