@@ -14,9 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
 
 FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 
-RUN apk --no-cache add ca-certificates \
-    && mkdir -p /data/notes \
-    && chown 65532:65532 /data/notes
+RUN apk --no-cache add ca-certificates tzdata
 COPY --from=builder /out/app /usr/local/bin/app
 
 ENV HOST=0.0.0.0 \
