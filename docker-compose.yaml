@@ -1,0 +1,14 @@
+services:
+  app:
+    image: ghcr.io/mykolabilyi/daily-notes-mcp:dev
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    environment:
+      NOTES_DIR: /data/notes
+      NOTES_TZ: UTC
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./notes:/data/notes
