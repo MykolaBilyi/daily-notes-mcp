@@ -1,0 +1,27 @@
+{
+  "name": "daily-notes-mcp",
+  "image": "mcr.microsoft.com/devcontainers/go:1",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "postCreateCommand": "${containerWorkspaceFolder}/.devcontainer/setup.sh",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers-extra/features/mise:1": {}
+  },
+  "remoteEnv": {
+    "EDITOR": "code --wait",
+    "TERM_FEATURES": "nerd-fonts"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "go.toolsManagement.checkForUpdates": "local",
+        "go.useLanguageServer": true,
+        "go.gopath": "/go"
+      },
+      "extensions": [
+        "DavidAnson.vscode-markdownlint",
+        "golang.Go"
+      ]
+    }
+  }
+}
