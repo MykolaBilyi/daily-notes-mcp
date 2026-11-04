@@ -7,6 +7,7 @@ services:
         VERSION: ${VERSION:-dev}
     environment:
       NOTES_DIR: /data/notes
+      NOTES_CONFIG: ${NOTES_CONFIG:-}
       NOTES_TZ: UTC
     ports:
       - "8080:8080"

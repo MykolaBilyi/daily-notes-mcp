@@ -207,7 +207,7 @@ func TestReplaceRewritesFrontmatter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	want := "---\ndate: 2026-11-04\n---\n\nnew\n"
+	want := "---\ndate: 2026-11-04\ncreated: yesterday\n---\n\nnew\n"
 	if string(data) != want {
 		t.Errorf("file = %q, want %q", string(data), want)
 	}

@@ -8,9 +8,12 @@ Guidance for agents working in this repository.
 [`github.com/modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) v1.8.0.
 It uses the streamable HTTP transport and exposes tools for reading and editing daily markdown notes.
 
-Notes live as `<notes-dir>/YYYY-MM-DD.md` with server-managed YAML frontmatter containing only
-`date`. Writes use optimistic concurrency (a SHA-256 revision), a per-note file lock, and atomic
-temp-file rename.
+By default notes live as `<notes-dir>/YYYY-MM-DD.md`. An Obsidian `daily-notes.json` can be
+supplied with `-config` / `NOTES_CONFIG` to control the folder, filename format, and template;
+paths are then generated from moment-style tokens such as `YYYY/MM-MMMM/YYYY-MM-DD-dddd`.
+Writes use optimistic concurrency (a SHA-256 revision), a per-note file lock, and atomic
+temp-file rename. Notes are discovered recursively, using the configured filename format or the
+`date` frontmatter property. Template frontmatter is merged with the server-managed `date`.
 
 ```sh
 go run ./cmd/app -host 0.0.0.0 -port 8080
@@ -63,6 +66,7 @@ Flags with environment fallbacks:
 | `-host` | `HOST` | `localhost` |
 | `-port` | `PORT` | `8000` |
 | `-notes-dir` | `NOTES_DIR` | `./notes` |
+| `-config` | `NOTES_CONFIG` | _(unset)_ |
 | `-tz` | `NOTES_TZ` | `UTC` |
 
 ## MCP conventions

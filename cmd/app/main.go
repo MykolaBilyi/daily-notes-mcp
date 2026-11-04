@@ -23,6 +23,7 @@ func main() {
 	host := flag.String("host", env("HOST", "localhost"), "host to listen on")
 	port := flag.Int("port", envInt("PORT", 8000), "port to listen on")
 	notesDir := flag.String("notes-dir", env("NOTES_DIR", "./notes"), "directory containing daily notes")
+	configPath := flag.String("config", env("NOTES_CONFIG", ""), "path to an Obsidian daily-notes.json config file")
 	tz := flag.String("tz", env("NOTES_TZ", "UTC"), "timezone used to determine today's date")
 
 	out := flag.CommandLine.Output()
@@ -31,7 +32,7 @@ func main() {
 		fmt.Fprintf(out, "Run the daily notes MCP server over streamable HTTP.\n\n")
 		fmt.Fprintf(out, "Options:\n")
 		flag.PrintDefaults()
-		fmt.Fprintf(out, "\nEnvironment defaults: HOST, PORT, NOTES_DIR, NOTES_TZ\n")
+		fmt.Fprintf(out, "\nEnvironment defaults: HOST, PORT, NOTES_DIR, NOTES_CONFIG, NOTES_TZ\n")
 	}
 	flag.Parse()
 
@@ -45,7 +46,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Invalid timezone %q: %v", *tz, err)
 	}
-	store, err := notes.New(*notesDir, loc)
+	var config notes.Config
+	if *configPath != "" {
+		config, err = notes.LoadConfig(*configPath)
+		if err != nil {
+			log.Fatalf("Failed to load notes config: %v", err)
+		}
+	}
+	store, err := notes.NewWithConfig(*notesDir, loc, config)
 	if err != nil {
 		log.Fatalf("Failed to open notes store: %v", err)
 	}
@@ -71,7 +79,9 @@ func main() {
 	}()
 
 	log.Printf("Daily notes MCP server %s listening on http://%s/mcp", version.Version, addr)
+	cfg := store.Config()
 	log.Printf("Notes directory: %s (timezone %s)", store.Dir(), loc)
+	log.Printf("Notes folder: %q, format: %q, template: %q", cfg.Folder, cfg.Format, cfg.Template)
 	log.Printf("Tools: get_today_note, update_today_note, get_note, search_notes")
 
 	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

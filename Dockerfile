@@ -22,6 +22,7 @@ COPY --from=builder /out/app /usr/local/bin/app
 ENV HOST=0.0.0.0 \
     PORT=8080 \
     NOTES_DIR=/data/notes \
+    NOTES_CONFIG= \
     NOTES_TZ=UTC
 
 EXPOSE 8080
