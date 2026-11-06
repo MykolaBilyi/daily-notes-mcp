@@ -1,6 +1,6 @@
 {
   "name": "daily-notes-mcp",
-  "image": "mcr.microsoft.com/devcontainers/go:1",
+  "image": "mcr.microsoft.com/devcontainers/go:1@sha256:32aad7e9eefed4fe99987cc4efef2f9723bd57c556f171143ecf65e0ba855ff3",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "postCreateCommand": "${containerWorkspaceFolder}/.devcontainer/setup.sh",
   "features": {
